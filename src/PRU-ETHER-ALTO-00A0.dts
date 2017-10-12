@@ -1,0 +1,57 @@
+ // DTS overlay for the Alto Ethernet driver.
+ // Based on https://credentiality2.blogspot.com/2015/09/beaglebone-pru-gpio-example.html
+ // https://credentiality2.blogspot.com/2015/09/beaglebone-pru-gpio-example.html
+ //
+ // Pin assignments:
+ // Input pin P9_24: PRU0 in:16
+ // Output pin P8_11: PRU0 out:15 (mode 6)
+ // Collision input pin P8_12: PRU0 out:14 (mode 6)
+ // Input pin (for testing) P9_26: PRU1 in:16
+ // Output pin (for signal generation) P8_45 PRU1 out:0 note: must disable HDMI
+ // Output pin (for signal generation) P8_46 PRU1 out:0 note: must disable HDMI
+
+ // Compile with:
+ // dtc -O dtb -I dts -o /lib/firmware/PRU-ETHER-ALTO-00A0.dtbo -b 0 -@ PRU-ETHER-ALTO-00A0.dts
+
+ // echo PRU-ETHER-ALTO > /sys/devices/bone_capemgr.?/slots
+
+ /dts-v1/;
+ /plugin/;
+
+ / {
+   compatible = "ti,beaglebone", "ti,beaglebone-green", "ti,beaglebone-black";
+
+   part-number = "PRU-ETHER-ALTO";
+
+   version = "00A0";
+
+   exclusive-use =
+      "P8.11", "P8.12", "P8.45", "P8.46", "P9.24", "P9.26", "pru0", "pru1";
+
+   fragment@0 {
+    target = <&am33xx_pinmux>;
+    __overlay__ {
+      example_pins: pinmux_pru_pru_pins {
+      // Pin values generated from
+      // http://kilobaser.com/blog/2014-07-28-beaglebone-black-devicetreeoverlay-generator
+       pinctrl-single,pins = <
+	 0x30 0x46 // P8.12 output, unusual mode 6
+         0x34 0x46 // P8.11 output, unusual mode 6
+	 0xa0 0x45 // P8.45 output
+	 0xa4 0x45 // P8.46 output
+	 0x180 0x26 // P9.26 input, pru1
+	 0x184 0x26 // P9.24 input
+       >;
+      };
+    };
+   };
+
+   fragment@1 {
+    target = <&pruss>;
+    __overlay__ {
+      status = "okay";
+      pinctrl-names = "default";
+      pinctrl-0 = <&example_pins>;
+    };
+   };
+ };
