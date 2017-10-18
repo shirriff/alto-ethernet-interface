@@ -53,7 +53,7 @@ There has been a lot of churn in the kernel's PRU support so other kernels may b
 To run the software:
 ```
 $ echo PRU-ETHER-ALTO > /sys/devices/bone_capemgr.?/slots
-$ cd ~IFS/PUP
+$ cd ~/IFS/PUP
 $ bin/Debug/IFS.exe &
 $ cd ~/ether
 $ ./etherNet &

@@ -45,6 +45,7 @@ void main() {
 			uint16_t status = receive_packet();
 			if (status != STATUS_SOFTWARE_RESET) {
 				// receive completed
+	            IFACE->r_command = COMMAND_NONE; // Wait before doing next receive
 				IFACE->r_status = status;
 				__R31 = 35;  // Interrupt to host
 				__delay_cycles(20);
@@ -136,7 +137,7 @@ inline uint16_t receive_packet() {
 	uint32_t prev_timer_cnt; // Old timer read value
 	uint32_t timer_cnt; // New timer read value
 	uint32_t last = 0; // last value read, low because of sync
-	uint16_t max_len /* bytes */ = IFACE->r_length /* bytes */;
+	uint16_t max_len /* bytes */ = IFACE->r_max_length /* bytes */;
 	uint8_t *buf = (uint8_t *)IFACE->r_buf; // Input buffer address
 	uint16_t count;
 	int i;
@@ -180,7 +181,7 @@ inline uint16_t receive_packet() {
 		}
 
 		// End of packet timeout. Return.
-		IFACE->r_length = count;
+		IFACE->r_received_length = count;
 		write_circular_buf(0x10000000 + count);
 		// Record last value, just for debugging
 		timer_cnt = *IEP_TMR_CNT;

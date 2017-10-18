@@ -53,7 +53,7 @@ const size_t byteBufLen = MAX_PUP_LENGTH;
 uint8_t *udpBuf; // UDP buffer has 2 bytes at beginning for length
 uint8_t *byteBuf; // Packet bytes
 // Buffer for raw transitions from PRU. Could be 2 transitions per bit
-size_t durationBufLen = 16 * MAX_PUP_LENGTH;
+size_t durationBufLen = 12*1024;
 uint8_t *durationBuf;
 // Buffer to hold individual bits.
 size_t bitBufLen = 8 * MAX_PUP_LENGTH;
@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
 
   while (1) {
     enableRecv();
-    // fprintf(stderr, "Waiting on recv %x %x\n", iface->r_buf, iface->r_length);
+    // fprintf(stderr, "Waiting on recv %x %x\n", iface->r_buf, iface->r_max_length);
     int pruFd = prussdrv_pru_event_fd(PRU_EVTOUT_0);
     fd_set rfds;
     FD_ZERO(&rfds);
@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
 
 void enableRecv() {
   iface->r_buf = R_PTR_OFFSET;
-  iface->r_length = durationBufLen;
+  iface->r_max_length = durationBufLen;
   iface->r_command = COMMAND_RECV;
 }
 
@@ -173,12 +173,22 @@ void enableRecv() {
 void recvFromAlto() {
   prussdrv_pru_wait_event(PRU_EVTOUT_0);
   prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
-  fprintf(stderr, "r_length status %d w_length status %d\n", iface->r_length, iface->w_length);
+  // fprintf(stderr, "\nr_length status %d w_length status %d\n", iface->r_received_length, iface->w_length);
   if (iface->r_status != STATUS_INPUT_COMPLETE) {
     fprintf(stderr, "Bad status %x\n", iface->r_status);
+    fprintf(logFile, "Bad status %x\n", iface->r_status);
+    int i;
+    for (i = 0; i < durationBufLen; i++) {
+      fprintf(logFile, "%d ", r_ptr[i]);
+    }
+    fprintf(logFile, "\n");
+  int r_length = iface->r_received_length;
+    memcpy(durationBuf, (uint8_t *) r_ptr, r_length);
+    int decodedLen = decode(r_length);
+    printf("decodedLen %d\n", decodedLen);
     return;
   }
-  int r_length = iface->r_length;
+  int r_length = iface->r_received_length;
   if (r_length > durationBufLen) {
     fprintf(stderr, "Received data too long %d vs %d\n", r_length, durationBufLen);
     return;
@@ -189,13 +199,13 @@ void recvFromAlto() {
   int decodedLen = decode(r_length);
   if (decodedLen < 0) {
     badPacketCount++;
-    fprintf(stderr, "Received bad data %d:\n", iface->r_length);
+    fprintf(stderr, "Received bad data %d:\n", iface->r_received_length);
     fprintf(stderr, "%d packets, %d bad\n", packetCount, badPacketCount);
     return;
   }
-  fprintf(stderr, "Recv: %d bytes\n", decodedLen);
-#if 1
-  fprintf(logFile, "Recv: %d bytes\n", decodedLen);
+  // fprintf(stderr, "Recv: %d bytes\n", decodedLen);
+#if 0
+  // fprintf(logFile, "Recv: %d bytes\n", decodedLen);
   int i;
   for (i = 0; i < decodedLen; i++) {
     fprintf(logFile, "%02x ", byteBuf[i]);
@@ -246,7 +256,7 @@ void sendToAlto() {
   iface->w_buf = W_PTR_OFFSET;
   iface->w_length = wordLength * 2;
   iface->w_command = COMMAND_SEND;
-#if 1
+#if 0
   fprintf(logFile, "sendToAlto: %d words\n", wordLength);
   int i;
   for (i = 0; i < wordLength*2; i++) {

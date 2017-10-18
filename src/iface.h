@@ -31,7 +31,8 @@
 // Interface between host and PRU
 struct iface {
 	uint32_t r_command; // in
-	uint32_t r_length; // bytes, in (max buffer len), out (received length)
+	uint32_t r_max_length; // in, bytes
+	uint32_t r_received_length; // out, bytes
 	uint32_t r_buf; // in (pointer)
 	uint32_t r_status; // out
 	uint32_t w_command; // in
