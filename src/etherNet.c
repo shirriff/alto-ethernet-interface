@@ -4,7 +4,7 @@
 // Receives UDP packets on port 42425 and send over Alto Ethernet
 //
 // Usage:
-// $ ./etherNet
+// $ ./etherNet [-l] [-v]
 //
 // Compile with:
 // gcc -o ether ether.c -lprussdrv
@@ -25,7 +25,6 @@ void enableRecv();
 void sendToAlto();
 void recvFromAlto();
 uint16_t crc(uint8_t *buf, int len);
-void halt();
 int decode(int len);
 
 void sendEchoPacket();
@@ -78,8 +77,23 @@ struct sockaddr_in s_recv;
 
 FILE *logFile;
 
+int verbose = 0;
+int logging = 0;
+
 int main(int argc, char **argv) {
-  logFile = fopen("/tmp/log", "w");
+  int i;
+  for (i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-l") == 0) {
+      logFile = fopen("/tmp/log", "w");
+      printf("Logging to /tmp/log\n");
+      logging = 1;
+    } else if (strcmp(argv[i], "-v") == 0) {
+      verbose = 1;
+    } else {
+      fprintf(stderr, "Usage: etherNet [-l] [-v]\n");
+      exit(0);
+    }
+  }
   prussdrv_init();
   if (prussdrv_open(PRU_EVTOUT_0) == -1) {
     fprintf(stderr, "prussdrv_open() failed. Run:\n");
@@ -150,12 +164,10 @@ int main(int argc, char **argv) {
     }
     if (FD_ISSET(recvSock, &rfds)) {
       // Packet received from UDP; send to Alto
-      // fprintf(stderr, "sendToAlto\n");
       sendToAlto();
     }
     if (FD_ISSET(pruFd, &rfds)) {
       // Packet received from Alto; send over UDP
-      // fprintf(stderr, "recvFromAlto\n");
       recvFromAlto();
     }
   }
@@ -176,16 +188,6 @@ void recvFromAlto() {
   // fprintf(stderr, "\nr_length status %d w_length status %d\n", iface->r_received_length, iface->w_length);
   if (iface->r_status != STATUS_INPUT_COMPLETE) {
     fprintf(stderr, "Bad status %x\n", iface->r_status);
-    fprintf(logFile, "Bad status %x\n", iface->r_status);
-    int i;
-    for (i = 0; i < durationBufLen; i++) {
-      fprintf(logFile, "%d ", r_ptr[i]);
-    }
-    fprintf(logFile, "\n");
-  int r_length = iface->r_received_length;
-    memcpy(durationBuf, (uint8_t *) r_ptr, r_length);
-    int decodedLen = decode(r_length);
-    printf("decodedLen %d\n", decodedLen);
     return;
   }
   int r_length = iface->r_received_length;
@@ -203,15 +205,17 @@ void recvFromAlto() {
     fprintf(stderr, "%d packets, %d bad\n", packetCount, badPacketCount);
     return;
   }
-  // fprintf(stderr, "Recv: %d bytes\n", decodedLen);
-#if 0
-  // fprintf(logFile, "Recv: %d bytes\n", decodedLen);
-  int i;
-  for (i = 0; i < decodedLen; i++) {
-    fprintf(logFile, "%02x ", byteBuf[i]);
+  if (logging) {
+    fprintf(logFile, "recvFromAlto: %d bytes\n", decodedLen);
+    int i;
+    for (i = 0; i < decodedLen; i++) {
+      fprintf(logFile, "%02x ", byteBuf[i]);
+    }
+    fprintf(logFile, "\n");
   }
-  fprintf(logFile, "\n");
-#endif
+  if (verbose) {
+    printf("Receive from Alto: %d bytes\n", decodedLen);
+  }
 
   // LCM's UDP encoding: prepend the data with the length in words
   int wordLength = (decodedLen + 1) / 2 - 1; // Subtract 1 for Ether CRC
@@ -235,7 +239,6 @@ void sendToAlto() {
 
   int wordLength = (udpBuf[0] << 8) | udpBuf[1];
   uint16_t crcVal = crc(byteBuf, wordLength);
-  // printf("CRC val %x\n", crcVal);
   byteBuf[wordLength * 2] = crcVal >> 8;
   byteBuf[wordLength * 2 + 1] = crcVal & 0xff;
   wordLength += 1;
@@ -243,26 +246,29 @@ void sendToAlto() {
   iface->w_buf = W_PTR_OFFSET;
   iface->w_length = wordLength * 2;
   iface->w_command = COMMAND_SEND;
-#if 0
-  fprintf(logFile, "sendToAlto: %d words\n", wordLength);
-  int i;
-  for (i = 0; i < wordLength*2; i++) {
-    fprintf(logFile, "%02x ", w_ptr[i]);
+  if (logging) {
+    fprintf(logFile, "sendToAlto: %d words\n", wordLength);
+    int i;
+    for (i = 0; i < wordLength*2; i++) {
+      fprintf(logFile, "%02x ", w_ptr[i]);
+    }
+    fprintf(logFile, "\n");
   }
-  fprintf(logFile, "\n");
-#endif
-  printf("Sending: len %d, offset %x %02x %02x %02x %02x\n", wordLength, W_PTR_OFFSET,
-      w_ptr[10], w_ptr[11], w_ptr[wordLength*2 - 4], w_ptr[wordLength*2-3]);
-  //fprintf(stderr, "Waiting on send\n");
+  if (verbose) {
+    printf("Sending to Alto: len %d\n", wordLength);
+  }
   prussdrv_pru_wait_event(PRU_EVTOUT_0);
   prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
-  //fprintf(stderr, "Send completed\n");
 }
 
 // Decode timings from PRU into bytes.
-// Return lenth in bytes or -1 for error
+// Return length in bytes or -1 for error
 int decode(int len) {
-  // Convert timings into high/low vector
+
+  // Convert timings in durationBuf into high/low vector in bitBuf
+  // bitBuf holds values like 1, 0, 0, 1, 0, 1, indicating if the input
+  // was high or low during that time interval.
+  // A Manchester-encoded data bit consists of two values in bitBuf.
   int offset1; // Offset into timing vector
   int offset2 = 0; // Offset into bit vector
   int value = 1; // Current high/low value
@@ -286,8 +292,8 @@ int decode(int len) {
       return -1;
     }
   }
-  // fprintf(stderr, "Len: %d %d\n", offset2, offset2 % 16);
-  // Convert bit pairs to bytes
+
+  // Convert bit pairs in bitBuf to bytes in byteBuf
   uint8_t byte = 0;
   int byteCount = 0;
   int i;
@@ -317,19 +323,16 @@ int decode(int len) {
     fprintf(stderr, "Bad offset2: %d\n", offset2);
     return -1;
   }
+
+  // Check the Ethernet CRC
   uint16_t crcVal = crc(byteBuf, (byteCount - 2) / 2);
   uint16_t readCrcVal = (byteBuf[byteCount - 2] << 8) | byteBuf[byteCount - 1];
   if (crcVal != readCrcVal) {
     fprintf(stderr, "Bad CRC %04x vs %04x\n", crcVal, readCrcVal);
     return -1;
   }
-  return byteCount;
-}
 
-void halt() {
-  fprintf(stderr, "Halting\n");
-  volatile struct iface *iface = (struct iface *)dataram;
-  iface->r_command = COMMAND_HALT;
+  return byteCount;
 }
 
 // Generate CRC-16 for Alto Ethernet
