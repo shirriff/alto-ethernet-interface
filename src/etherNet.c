@@ -214,25 +214,12 @@ void recvFromAlto() {
 #endif
 
   // LCM's UDP encoding: prepend the data with the length in words
-  int wordLength = (decodedLen + 1) / 2;
+  int wordLength = (decodedLen + 1) / 2 - 1; // Subtract 1 for Ether CRC
   udpBuf[0] = wordLength >> 8;
   udpBuf[1] = wordLength & 0xff;
   if (sendto(sendSock, udpBuf, decodedLen + 2, 0, (struct sockaddr *)&s_send, sizeof(struct sockaddr_in)) < 0) {
     perror("send");
   }
-}
-
-void sendTestToAlto() {
-
-  int wordLength = (udpBuf[0] << 8) | udpBuf[1];
-  memcpy((uint8_t *) w_ptr, byteBuf, wordLength * 2);
-  iface->w_buf = W_PTR_OFFSET;
-  iface->w_length = wordLength * 2;
-  iface->w_command = COMMAND_SEND;
-  fprintf(stderr, "Waiting on send\n");
-  prussdrv_pru_wait_event(PRU_EVTOUT_0);
-  prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
-  fprintf(stderr, "Send completed\n");
 }
 
 // Send packet to Alto
@@ -333,7 +320,7 @@ int decode(int len) {
   uint16_t crcVal = crc(byteBuf, (byteCount - 2) / 2);
   uint16_t readCrcVal = (byteBuf[byteCount - 2] << 8) | byteBuf[byteCount - 1];
   if (crcVal != readCrcVal) {
-    fprintf(stderr, "Bad checksum %04x vs %04x\n", crcVal, readCrcVal);
+    fprintf(stderr, "Bad CRC %04x vs %04x\n", crcVal, readCrcVal);
     return -1;
   }
   return byteCount;
@@ -364,60 +351,4 @@ uint16_t crc(uint8_t *buf, int len) {
     }
   }
   return crc;
-}
-
-int hexCharToInt(char c) {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
-  } else if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  } else if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  } else {
-    printf("Bad char %c\n", c);
-    exit(-1);
-  }
-}
-
-int c = 0;
-void sendEchoPacket() {
-  // send
-  int buf_offset = 1024;
-  uint8_t *buf = malloc(1024);
-  
-  // int len = getData("bootblock", buf, 1024);
-  // char *bytes = "00 43 02 00 00 19 00 01 00 00 00 00 00 00 00 00 00 05 00 43 8e d0 cc 9d 66 6f 6f 21 ff ff ff ff";
-  char *bytes = "42 43 01 C0 09 6d ff ff 00 01 01 01 ff ff";
-  printf("Sending echo packet\n");
-  int byteCount = 0;
-  int i;
-  for (i = 0; i < strlen(bytes); i += 3) { 
-    buf[byteCount++] = hexCharToInt(bytes[i]) * 16 + hexCharToInt(bytes[i + 1]);
-  }
-  buf[0] = 0;
-  buf[1] = 0;
-  //buf[6] = c >> 8;
-  //buf[7] = c & 0xff;
-   c++;
-  uint16_t crc_val = crc(buf, byteCount / 2);
-  printf("crc: %04x\n", crc_val);
-  buf[byteCount++] = crc_val >> 8;
-  buf[byteCount++] = crc_val & 0xff;
-    printf("Sending\n");
-    //sendbuf(buf, byteCount / 2);
-
-  int wordLength = byteCount / 2;
-  memcpy((uint8_t *) w_ptr, buf, wordLength * 2);
-  for (i = 0; i < wordLength; i++) {
-    printf("%04x ", ((uint16_t *)w_ptr)[i]);
-  }
-  printf("\n");
-  iface->w_buf = W_PTR_OFFSET;
-  printf("Echo code sending len %d, offset %x\n", wordLength, W_PTR_OFFSET);
-  iface->w_length = wordLength * 2;
-  iface->w_command = COMMAND_SEND;
-  fprintf(stderr, "Waiting on send\n");
-  prussdrv_pru_wait_event(PRU_EVTOUT_0);
-  prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
-  fprintf(stderr, "Send completed\n");
 }
