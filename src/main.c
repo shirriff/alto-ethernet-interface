@@ -17,9 +17,9 @@ uint16_t send_packet();
 uint16_t receive_packet();
 void init_pwm();
 void wait_for_pwm_timer();
-void write_circular_buf(uint32_t val);
 void reset_iep_timer();
 void init_iep_timer();
+void write_circular_buf(uint32_t val);
 
 #if 1 /* live */
 #define HIGH 0
@@ -40,30 +40,30 @@ void main() {
 
 	int done = 0;
 	while (!done) {
-		if (IFACE->r_command == COMMAND_RECV) {
-			// Will block until packet received or interrupted by w_command
+		if (IFACE->r_owner == OWNER_PRU) { // Read buffer passed to PRU
+			// Will block until packet received or interrupted by write
 			uint16_t status = receive_packet();
 			if (status != STATUS_SOFTWARE_RESET) {
 				// receive completed
-	            IFACE->r_command = COMMAND_NONE; // Wait before doing next receive
+	            IFACE->r_owner = OWNER_ARM; // Read done, pass buffer back to ARM
 				IFACE->r_status = status;
 				__R31 = 35;  // Interrupt to host
 				__delay_cycles(20);
 				__R31 = 0;
-				write_circular_buf(0xcafe0000 + status);
 			}
-		}
-		uint8_t w_command = IFACE->w_command;
-		if (w_command != 0) {
-			write_circular_buf(0xa0000000 + w_command);
-			if (w_command == COMMAND_SEND) {
-				IFACE->w_status = send_packet();
-			} else if (w_command == COMMAND_HALT) {
-				done = 1;
-			}
-			write_circular_buf(0xb0000000 | IFACE->w_status);
+		} else {
+		    if (!(__R31 & (1 << READ_PIN))) {
+		        // Data coming in but read buffer not ready. Let ARM know.
+                IFACE->r_status = STATUS_TRUNCATED;
+                __R31 = 35;  // Interrupt to host
+                __delay_cycles(20);
+                __R31 = 0;
 
-			IFACE->w_command = COMMAND_NONE; // Wait for new command
+		    }
+		}
+		if (IFACE->w_owner == OWNER_PRU) { // Write buffer passed to PRU
+			IFACE->w_status = send_packet();
+			IFACE->w_owner = OWNER_ARM; // Write done, pass buffer back to ARM
 			__R31 = 35;  // Interrupt to host
 			__delay_cycles(20);
 			__R31 = 0;
@@ -78,15 +78,15 @@ inline uint16_t send_packet() {
 	uint16_t len /* bytes */ = IFACE->w_length /* bytes */;
 	uint8_t *buf = (uint8_t *)IFACE->w_buf;
 
-
-	__R30 = HIGH << WRITE_PIN; // XXX
+	// __R30 = HIGH << WRITE_PIN; // XXX
 
 	// Generate CTR = PRD (counter = period) event
-	// Send sync 1 bit (0 then 1)
+	// Send sync 1 bit (1 then 0)
 
 	// Wait for timer, send (hold) 1
 	wait_for_pwm_timer();
 	__R30 = HIGH << WRITE_PIN;
+	uint8_t oldR31 = __R31 && (1 << READ_PIN);
 
 	// Wait for timer, send 0
 	wait_for_pwm_timer();
@@ -96,14 +96,16 @@ inline uint16_t send_packet() {
 	for (i = 0; i < len; i++) {
 		uint8_t byte = buf[i];
 		uint8_t bit_count;
+#pragma UNROLL(8)
 		for (bit_count = 0; bit_count < 8; bit_count++) {
-			if (__R31 && (1 << READ_PIN) && 0) {
+			if ((__R31 && (1 << READ_PIN)) == 42) {
 				// Raise collision signal
 				write_circular_buf(0xdeaddead);
 				__R30 = (1 << COLL_PIN) | (HIGH << WRITE_PIN);
 				__delay_cycles(200); // 1000 ns
 				__R30 = HIGH << WRITE_PIN;
-				return STATUS_OUTPUT_COMPLETE | STATUS_BIT_COLLISION;
+				IFACE->w_length = 42;
+				return STATUS_BIT_COLLISION;
 			}
 			if (byte & 0x80) {
 				// Send 1 (1 then 0)
@@ -125,6 +127,7 @@ inline uint16_t send_packet() {
 	// End with 1
 	wait_for_pwm_timer();
 	__R30 = HIGH << WRITE_PIN;
+
 	// Return status
 	return STATUS_OUTPUT_COMPLETE;
 
@@ -142,7 +145,7 @@ inline uint16_t receive_packet() {
 	uint16_t count;
 	int i;
 
-#if 0
+#if 1
 	if (!(__R31 & (1 << READ_PIN))) {
 	  return STATUS_ZERO_LENGTH;
 	}
@@ -157,20 +160,17 @@ inline uint16_t receive_packet() {
 	}
 #endif
 
-	do {
-		prev_timer_cnt = *IEP_TMR_CNT;
-		// Wait for sync (low transition)
-		while (__R31 & (1 << READ_PIN)) {
-			// Check for interrupt of receive, i.e. host wants to send
-			if (IFACE->w_command != 0) {
-				write_circular_buf(0xf0000000);
-				return STATUS_SOFTWARE_RESET;
-			}
+	// Wait for midpoint of sync (low transition)
+	// This could be a long wait if there's no packet coming
+	while (__R31 & (1 << READ_PIN)) {
+		// Check for interrupt of receive, i.e. host wants to send
+		if (IFACE->w_owner == OWNER_PRU) {
+			write_circular_buf(0xf0000000);
+			return STATUS_SOFTWARE_RESET;
 		}
-		timer_cnt = *IEP_TMR_CNT;
-	} while (timer_cnt - prev_timer_cnt < 1000);
+	}
 
-	prev_timer_cnt = timer_cnt;
+	prev_timer_cnt = *IEP_TMR_CNT;
 
 	// Check for input transition (unrolled loop)
 	for (count = 0; count < max_len; count++) {
@@ -186,7 +186,6 @@ inline uint16_t receive_packet() {
 		// Record last value, just for debugging
 		timer_cnt = *IEP_TMR_CNT;
 		buf[count] = (timer_cnt - prev_timer_cnt) / 2; // Store (scaled) time since previous transition
-
 		return STATUS_INPUT_COMPLETE;
 
 		// Transition detected. Record pulse width.

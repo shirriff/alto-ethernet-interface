@@ -4,7 +4,7 @@
 // Receives UDP packets on port 42425 and send over Alto Ethernet
 //
 // Usage:
-// $ ./etherNet [-l] [-v]
+// $ ./gateway [-l] [-v] [-d]
 //
 // Compile with:
 // gcc -o ether ether.c -lprussdrv
@@ -44,6 +44,8 @@ volatile uint8_t *r_ptr; // Processor's pointer to read buf at 0x10000
 #define W_PTR_OFFSET 0x400
 #define R_PTR_OFFSET 0x10000
 
+#define DPRINTF if (debug) printf
+
 #define MAX_PUP_LENGTH (554 + 10) // Extra 10 for slop
 // Worst case is 16 transitions per byte. Needs to be under 12K.
 
@@ -79,6 +81,7 @@ FILE *logFile;
 
 int verbose = 0;
 int logging = 0;
+int debug = 0;
 
 int main(int argc, char **argv) {
   int i;
@@ -89,8 +92,10 @@ int main(int argc, char **argv) {
       logging = 1;
     } else if (strcmp(argv[i], "-v") == 0) {
       verbose = 1;
+    } else if (strcmp(argv[i], "-d") == 0) {
+      debug = 1;
     } else {
-      fprintf(stderr, "Usage: etherNet [-l] [-v]\n");
+      fprintf(stderr, "Usage: gateway [-l] [-v] [-d]\n");
       exit(0);
     }
   }
@@ -104,6 +109,7 @@ int main(int argc, char **argv) {
   tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_CUSTOM;
   prussdrv_pruintc_init(&pruss_intc_initdata);
 
+  // Start PRU
   if (prussdrv_load_datafile(0 /* PRU0 */, "etherdata.bin") < 0) {
     fprintf(stderr, "Error loading etherdata.bin\n");
     exit(-1);
@@ -112,7 +118,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Error loading ethertext.bin\n");
     exit(-1);
   }
-
+  DPRINTF("started PRU\n");
   if (prussdrv_map_prumem(PRUSS0_PRU0_DATARAM, (void *)&dataram) < 0) {
     fprintf(stderr, "map_prumem failed");
     exit(-1);
@@ -126,6 +132,13 @@ int main(int argc, char **argv) {
   iface = (struct iface *)dataram;
   w_ptr = (uint8_t *)(dataram + W_PTR_OFFSET);
   r_ptr = (uint8_t *)(dataram + R_PTR_OFFSET);
+
+  iface->r_owner = OWNER_PRU; // PRU can read into buffer
+  iface->r_buf = R_PTR_OFFSET;
+  iface->r_max_length = durationBufLen;
+
+  iface->w_owner = OWNER_ARM; // ARM can use write buffer
+  iface->w_buf = W_PTR_OFFSET;
 
   // Init sockets
   sendSock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -148,44 +161,55 @@ int main(int argc, char **argv) {
     exit(-1);
   }
 
+  int pruFd = prussdrv_pru_event_fd(PRU_EVTOUT_0);
+  fd_set rfds;
   while (1) {
-    enableRecv();
     // fprintf(stderr, "Waiting on recv %x %x\n", iface->r_buf, iface->r_max_length);
-    int pruFd = prussdrv_pru_event_fd(PRU_EVTOUT_0);
-    fd_set rfds;
     FD_ZERO(&rfds);
     FD_SET(pruFd, &rfds);
-    FD_SET(recvSock, &rfds);
-    int maxfd = pruFd > recvSock ? pruFd : recvSock;
+    int maxfd = pruFd;
+    // Only wait on socket data if the write buffer is available.
+    // I.e. if there is a write in progress, don't start a new one.
+    if (iface->w_owner == OWNER_ARM) {
+      FD_SET(recvSock, &rfds);
+      if (recvSock > maxfd) {
+        maxfd = recvSock;
+      }
+      DPRINTF("Waiting on PRU or socket: r_owner %d w_owner %d\n", iface->r_owner, iface->w_owner);
+    } else {
+      DPRINTF("Waiting on PRU: r_owner %d w_owner %d\n", iface->r_owner, iface->w_owner);
+    }
     int retval = select(maxfd + 1, &rfds, NULL /* wfds */, NULL /* exceptfds */, NULL /* timeout */);
     if (retval == 0) {
-      fprintf(stderr, "Timeout\n");
+      DPRINTF("Select timeout\n");
       continue;
     }
+
+    // If interrupt received from the PRU, clear it.
+    if (FD_ISSET(pruFd, &rfds)) {
+      DPRINTF("Clearing PRU interrupt: r_owner %d w_owner %d\n", iface->r_owner, iface->w_owner);
+      prussdrv_pru_wait_event(PRU_EVTOUT_0);
+      prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
+    }
+
+    if (iface->r_owner == OWNER_ARM) {
+      // PRU gave us a read packet from the Alto. Send over UDP.
+      recvFromAlto();
+    }
+
     if (FD_ISSET(recvSock, &rfds)) {
       // Packet received from UDP; send to Alto
       sendToAlto();
-    }
-    if (FD_ISSET(pruFd, &rfds)) {
-      // Packet received from Alto; send over UDP
-      recvFromAlto();
     }
   }
 }
 
 #define RECV_WIDTH 2 // Recv values are in units of 2 ns (to fit in byte)
 
-void enableRecv() {
-  iface->r_buf = R_PTR_OFFSET;
-  iface->r_max_length = durationBufLen;
-  iface->r_command = COMMAND_RECV;
-}
-
 // Receive packet from Alto
 void recvFromAlto() {
   prussdrv_pru_wait_event(PRU_EVTOUT_0);
   prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
-  // fprintf(stderr, "\nr_length status %d w_length status %d\n", iface->r_received_length, iface->w_length);
   if (iface->r_status != STATUS_INPUT_COMPLETE) {
     fprintf(stderr, "Bad status %x\n", iface->r_status);
     return;
@@ -196,7 +220,10 @@ void recvFromAlto() {
     return;
   }
   memcpy(durationBuf, (uint8_t *) r_ptr, r_length);
-  enableRecv(); // Ready for next packet
+
+  // Ready for next packet
+  iface->r_owner = OWNER_PRU;
+
   packetCount++;
   int decodedLen = decode(r_length);
   if (decodedLen < 0) {
@@ -213,7 +240,7 @@ void recvFromAlto() {
     }
     fprintf(logFile, "\n");
   }
-  if (verbose) {
+  if (verbose || debug) {
     printf("Receive from Alto: %d bytes\n", decodedLen);
   }
 
@@ -227,7 +254,14 @@ void recvFromAlto() {
 }
 
 // Send packet to Alto
+// This delivers the packet to the PRU, which will start sending.
 void sendToAlto() {
+  if (iface->w_owner != OWNER_ARM) {
+    // Shouldn't happen
+    fprintf(stderr, "sendToAlto called while not ready.\n");
+    return;
+  }
+
   // Read data from socket
   struct sockaddr_storage src_addr;
   socklen_t src_addr_len = sizeof(src_addr);
@@ -243,9 +277,7 @@ void sendToAlto() {
   byteBuf[wordLength * 2 + 1] = crcVal & 0xff;
   wordLength += 1;
   memcpy((uint8_t *) w_ptr, byteBuf, wordLength * 2);
-  iface->w_buf = W_PTR_OFFSET;
   iface->w_length = wordLength * 2;
-  iface->w_command = COMMAND_SEND;
   if (logging) {
     fprintf(logFile, "sendToAlto: %d words\n", wordLength);
     int i;
@@ -254,17 +286,16 @@ void sendToAlto() {
     }
     fprintf(logFile, "\n");
   }
-  if (verbose) {
+  if (verbose || debug) {
     printf("Sending to Alto: len %d\n", wordLength);
   }
-  prussdrv_pru_wait_event(PRU_EVTOUT_0);
-  prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
+  // Signal PRU to send the data in the write buffer.
+  iface->w_owner = OWNER_PRU;
 }
 
 // Decode timings from PRU into bytes.
 // Return length in bytes or -1 for error
 int decode(int len) {
-
   // Convert timings in durationBuf into high/low vector in bitBuf
   // bitBuf holds values like 1, 0, 0, 1, 0, 1, indicating if the input
   // was high or low during that time interval.
@@ -303,6 +334,7 @@ int decode(int len) {
     bitBuf[offset2] = 1;
     offset2 += 1;
   }
+  // Start at 1 to skip sync
   for (i = 1; i < offset2; i += 2) {
     if (bitBuf[i] == bitBuf[i+1]) {
       fprintf(stderr, "Bad bit sequence at %d of %d: %d %d\n", i, offset2, bitBuf[i], bitBuf[i+1]);
