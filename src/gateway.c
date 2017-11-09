@@ -190,6 +190,7 @@ int main(int argc, char **argv) {
       DPRINTF("Clearing PRU interrupt: r_owner %d w_owner %d\n", iface->r_owner, iface->w_owner);
       prussdrv_pru_wait_event(PRU_EVTOUT_0);
       prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
+      DPRINTF("Cleared PRU interrupt: r_owner %d w_owner %d\n", iface->r_owner, iface->w_owner);
     }
 
     if (iface->r_owner == OWNER_ARM) {
@@ -208,8 +209,6 @@ int main(int argc, char **argv) {
 
 // Receive packet from Alto
 void recvFromAlto() {
-  prussdrv_pru_wait_event(PRU_EVTOUT_0);
-  prussdrv_pru_clear_event(PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
   if (iface->r_status != STATUS_INPUT_COMPLETE) {
     fprintf(stderr, "Bad status %x\n", iface->r_status);
     return;
