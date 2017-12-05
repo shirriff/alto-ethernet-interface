@@ -56,7 +56,7 @@ $ echo PRU-ETHER-ALTO > /sys/devices/bone_capemgr.?/slots
 $ cd ~/IFS/PUP
 $ bin/Debug/IFS.exe &
 $ cd ~/ether
-$ ./etherNet &
+$ ./gateway &
 ```
 
 ### IFS
@@ -67,6 +67,46 @@ This software is in C#. It can run on the BeagleBone using Mono.
 The original IFS repository is [https://github.com/livingcomputermuseum/IFS](here://github.com/livingcomputermuseum/IFS).
 My version of IFS with modified UDP support is [https://github.com/shirriff/IFS](https://github.com/shirriff/IFS).
 
+## Installation
+
+To configure a BeagleBone with this software, see [build/README.md](build/READmE.md).
+
 ## Notes
 
 I wrote articles on the [BeagleBone PRU](http://www.righto.com/2016/08/pru-tips-understanding-beaglebones.html) and [PRU C compiler](http://www.righto.com/2016/09/how-to-run-c-programs-on-beaglebones.html).
+
+
+Notes:
+
+LEDS:
+0 (Left): sending packet to Alto
+1: received packet from Alto
+2: timeout (5 seconds with no activity)
+3: select loop (gateway alive)
+
+(To create IFS.tgz: tar -czvf IFS.tgz IFS)
+To check systemd: `systemctl status alto-gateway.service` (or alto-ifs.service)
+Also look in /var/log/syslog for errors
+
+## Use
+
+Connect the Ethernet cable from the cape (i.e. the top board) to the Alto.
+Boot the BeagleBone.
+The 4 LEDs on the BeagleBone should flash randomly for about 35 seconds.
+Then the LEDs should go out for a few seconds.
+Then the first and last LEDs should blink briefly every second.
+
+On the Alto, hold down backspace and apostrophe. Press the reset button on the back of the keyboard. Continue holding down backspace and apostrophe for a couple seconds until the cursor changes to a box of dots.
+While this is happening, the first, second and fourth LED should be flashing a lot, indicating network traffic.
+Hopefully the Alto will boot to the "Net Executive".
+From here, type a question mark to list commands.
+Type `astroroids` [sic] to boot the Asteroids game.
+Type `ftp` for FTP. Note: it will hang with a two-box cursor if you don't have a disk running.
+```
+login test
+open 1#
+list *
+```
+
+You should be able to ssh into the BeagleBone as 192.168.4.5 if necessary.
+

@@ -1,0 +1,13 @@
+[Unit]
+Description=Xerox Alto Ethernet gateway
+After=syslog.target network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root
+ExecStartPre=/bin/sleep 10
+ExecStart=/root/gateway -v
+SyslogIdentifier=alto-gateway
+
+[Install]
+WantedBy=multi-user.target

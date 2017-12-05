@@ -60,6 +60,11 @@ uint8_t *durationBuf;
 size_t bitBufLen = 8 * MAX_PUP_LENGTH;
 uint8_t *bitBuf;
 
+// LED status control
+FILE *led[4];
+void initLeds();
+void setLed(int n, int brightness);
+
 int packetCount = 0, badPacketCount = 0;
 
 #define UDP_RECV_PORT 42424 // Defined in ifs.cfg
@@ -99,6 +104,7 @@ int main(int argc, char **argv) {
       exit(0);
     }
   }
+  initLeds();
   prussdrv_init();
   if (prussdrv_open(PRU_EVTOUT_0) == -1) {
     fprintf(stderr, "prussdrv_open() failed. Run:\n");
@@ -136,6 +142,7 @@ int main(int argc, char **argv) {
   iface->r_owner = OWNER_PRU; // PRU can read into buffer
   iface->r_buf = R_PTR_OFFSET;
   iface->r_max_length = durationBufLen;
+  iface->r_truncated = 0;
 
   iface->w_owner = OWNER_ARM; // ARM can use write buffer
   iface->w_buf = W_PTR_OFFSET;
@@ -163,6 +170,7 @@ int main(int argc, char **argv) {
 
   int pruFd = prussdrv_pru_event_fd(PRU_EVTOUT_0);
   fd_set rfds;
+
   while (1) {
     // fprintf(stderr, "Waiting on recv %x %x\n", iface->r_buf, iface->r_max_length);
     FD_ZERO(&rfds);
@@ -179,9 +187,16 @@ int main(int argc, char **argv) {
     } else {
       DPRINTF("Waiting on PRU: r_owner %d w_owner %d\n", iface->r_owner, iface->w_owner);
     }
-    int retval = select(maxfd + 1, &rfds, NULL /* wfds */, NULL /* exceptfds */, NULL /* timeout */);
+    setLed(3, 0);
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    int retval = select(maxfd + 1, &rfds, NULL /* wfds */, NULL /* exceptfds */, &timeout);
+    setLed(3, 1);
     if (retval == 0) {
+      setLed(2, 1);
       DPRINTF("Select timeout\n");
+      setLed(2, 0);
       continue;
     }
 
@@ -195,12 +210,16 @@ int main(int argc, char **argv) {
 
     if (iface->r_owner == OWNER_ARM) {
       // PRU gave us a read packet from the Alto. Send over UDP.
+      setLed(1, 1);
       recvFromAlto();
+      setLed(1, 0);
     }
 
     if (FD_ISSET(recvSock, &rfds)) {
       // Packet received from UDP; send to Alto
+      setLed(0, 1);
       sendToAlto();
+      setLed(0, 0);
     }
   }
 }
@@ -209,6 +228,11 @@ int main(int argc, char **argv) {
 
 // Receive packet from Alto
 void recvFromAlto() {
+  setLed(0, 1);
+  if (iface->r_truncated) {
+    fprintf(stderr, "Truncated packet received\n");
+    iface->r_truncated = 0;
+  }
   if (iface->r_status != STATUS_INPUT_COMPLETE) {
     fprintf(stderr, "Bad status %x\n", iface->r_status);
     return;
@@ -385,4 +409,35 @@ uint16_t crc(uint8_t *buf, int len) {
     }
   }
   return crc;
+}
+
+char *ledPath = "/sys/class/leds/beaglebone:green:usr";
+#define LED_LEN 60
+void initLeds() {
+  char ledBuf[LED_LEN];
+  int i;
+  for (i = 0; i < 4; i++) {
+    snprintf(ledBuf, LED_LEN, "%s%d/trigger", ledPath, i);
+    printf("%s\n", ledBuf);
+    FILE *trigger = fopen(ledBuf, "w");
+    if (trigger == NULL) {
+      perror(ledBuf);
+      exit(-1);
+    }
+    fprintf(trigger, "none\n");
+    fclose(trigger);
+    snprintf(ledBuf, LED_LEN, "%s%d/brightness", ledPath, i);
+    printf("%s\n", ledBuf);
+    led[i] = fopen(ledBuf, "w");
+    if (led[i] == NULL) {
+      perror(ledBuf);
+      exit(-1);
+    }
+    setLed(i, 0);
+  }
+}
+
+void setLed(int n, int brightness) {
+  fprintf(led[n], "%d\n", brightness);
+  fflush(led[n]);
 }

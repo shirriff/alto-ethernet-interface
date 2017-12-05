@@ -1,0 +1,13 @@
+[Unit]
+Description=Xerox Alto Ethernet IFS
+After=syslog.target network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/IFS
+ExecStart=/usr/bin/cli /root/IFS/IFS.exe
+SyslogIdentifier=alto-ifs
+StandardOutput=tty
+
+[Install]
+WantedBy=multi-user.target
