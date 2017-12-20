@@ -1,7 +1,5 @@
 # Alto Ethernet Interface
 
-Note: this system is still under development as of October 2017.
-
 This project is an interface / gateway from the Xerox Alto's 3 Mb/s Ethernet
 to the outside world.
 The software runs on a [BeagleBone Black](http://beagleboard.org/bone) single-board Linux computer and uses a simple interface board (shield) to interface with the Alto's Ethernet.
@@ -39,7 +37,8 @@ communicate with IFS.
 
 The interface board plugs into the BeagleBone and simply translates signal
 levels between the BeagleBone and the Alto.
-A schematic and PCB design were created in EagleCad.
+A schematic and PCB design were created in EagleCad, in the *board* directory.
+A newer, untested version created with KiCad is in *board2*.
 
 ### The Beaglebone software
 
@@ -47,17 +46,7 @@ A schematic and PCB design were created in EagleCad.
  * The C gateway code.
  * The device tree overlay file, which sets the BeagleBone's pins correctly to communicate with the interface board.
 
-This software is targeted at the BeagleBone black with the 3.8.13-bone80 kernel.
-There has been a lot of churn in the kernel's PRU support so other kernels may be an adventure.
-
-To run the software:
-```
-$ echo PRU-ETHER-ALTO > /sys/devices/bone_capemgr.?/slots
-$ cd ~/IFS/PUP
-$ bin/Debug/IFS.exe &
-$ cd ~/ether
-$ ./gateway &
-```
+The source code is in the *src* directory and pre-built binaries ready to install are in the *build* directory.
 
 ### IFS
  
@@ -75,18 +64,6 @@ To configure a BeagleBone with this software, see [build/README.md](build/READmE
 
 I wrote articles on the [BeagleBone PRU](http://www.righto.com/2016/08/pru-tips-understanding-beaglebones.html) and [PRU C compiler](http://www.righto.com/2016/09/how-to-run-c-programs-on-beaglebones.html).
 
-
-Notes:
-
-LEDS:
-0 (Left): sending packet to Alto
-1: received packet from Alto
-2: timeout (5 seconds with no activity)
-3: select loop (gateway alive)
-
-(To create IFS.tgz: tar -czvf IFS.tgz IFS)
-To check systemd: `systemctl status alto-gateway.service` (or alto-ifs.service)
-Also look in /var/log/syslog for errors
 
 ## Use
 
@@ -109,4 +86,16 @@ list *
 ```
 
 You should be able to ssh into the BeagleBone as 192.168.4.5 if necessary.
+
+## Notes
+
+LEDS:
+* 0 (Left): sending packet to Alto
+* 1: received packet from Alto
+* 2: timeout (5 seconds with no activity)
+* 3: select loop (gateway alive)
+
+(To create IFS.tgz: tar -czvf IFS.tgz IFS)
+To check systemd: `systemctl status alto-gateway.service` (or alto-ifs.service)
+Also look in /var/log/syslog for errors
 
