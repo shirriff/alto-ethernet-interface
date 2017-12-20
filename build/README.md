@@ -12,8 +12,8 @@ Linux beaglebone 3.8.13-bone80 #1 SMP Wed Jun 15 17:03:55 UTC 2016 armv7l GNU/Li
 If the BeagleBone already has a 3.8 kernel you're in luck. Otherwise, you'll need to flash a new kernel.
 
 You can download it [here](https://debian.beagleboard.org/images/bone-debian-7.11-lxde-4gb-armhf-2016-06-15-4gb.img.xz).
-To replace BeagleBone kernel, write the image to micro-SD card, boot, edit /boot/uEnv.txt to enable flash, boot to write flash, remove micro-SD card, reboot.
-Detailed instructions [here](https://elinux.org/Beagleboard:BeagleBoneBlack_Debian#Flashing_eMMC) and [here](http://derekmolloy.ie/write-a-new-image-to-the-beaglebone-black/) to
+To replace BeagleBone kernel, write the image to a micro-SD card. Mount the card (either on a Linux machine or BeagleBone) and edit /boot/uEnv.txt to enable the eMMC flasher. Install the micro-SD card in the BeagleBone and boot while holding down the SD boot button (opposite end of the board from the power button). This will copy the SD card contents to flash. This will take about 10 minutes, during which time the LEDs will go back and forth. The board will shut down when done. Remove the micro-SD card and reboot. You'll probably want to have a serial console connected so you can see what's happening.
+Detailed instructions [here](https://elinux.org/Beagleboard:BeagleBoneBlack_Debian#Flashing_eMMC) and [here](http://derekmolloy.ie/write-a-new-image-to-the-beaglebone-black/).
 
 ## Install Mono
 
@@ -63,3 +63,6 @@ If you want to use tcpdump to collect traces, install tcpdump and then:
 ```
 tcpdump -i any -l portrange 42424-42426 -w capture.pcap
 ```
+# Quick setup
+
+If you do the whole installation to an SD card instead of flash, you can easily install new BeagleBones. Follow the instructions above for flashing a new kernel, except use the SD card that has the installation.
