@@ -1,9 +1,9 @@
-# Instructions for building the board (obsolete)
+# Instructions for building the v3 board
 
-Note: this version of the board has been replaced by boardv3.
+This board fixes a missing trace in v2.
 
 The board was designed with KiCad. This directory contains the KiCad files.
-The board can be ordered from OshPark [here](https://oshpark.com/shared_projects/5WJDIPzl).
+The board can be ordered from OshPark [here](https://oshpark.com/shared_projects/q9WVjQhn).
 
 ## Materials
 
@@ -43,7 +43,7 @@ W Y . . . R . . . . L . .
 
 ## Testing
 
-Output signal to Alto can be measured across pins 1 and 3 of the IC (pin 1 = ground). When connected to Alto, signal should be idle low (0.5V), pulsing to 4.5V. Can be a bit of overshoot, but shouldn't be ringing.
+Output signal to Alto can be measured across pins 1 and 3 of the IC (pin 1 = ground). When connected to Alto, signal should be idle low (0.2V), pulsing to 3.5V. Can be a bit of overshoot, but shouldn't be ringing.
 When disconnected from Alto, signal should go between 0V and 5V.
 
 

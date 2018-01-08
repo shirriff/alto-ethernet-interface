@@ -37,8 +37,7 @@ communicate with IFS.
 
 The interface board plugs into the BeagleBone and simply translates signal
 levels between the BeagleBone and the Alto.
-A schematic and PCB design were created in EagleCad, in the *board* directory.
-A newer, untested version created with KiCad is in *board2*.
+A schematic and PCB design were created in KiCad, in the *board* directory.
 
 ### The Beaglebone software
 
@@ -58,12 +57,7 @@ My version of IFS with modified UDP support is [https://github.com/shirriff/IFS]
 
 ## Installation
 
-To configure a BeagleBone with this software, see [build/README.md](build/READmE.md).
-
-## Notes
-
-I wrote articles on the [BeagleBone PRU](http://www.righto.com/2016/08/pru-tips-understanding-beaglebones.html) and [PRU C compiler](http://www.righto.com/2016/09/how-to-run-c-programs-on-beaglebones.html).
-
+To configure a BeagleBone with this software, see [build/README.md](build/README.md).
 
 ## Use
 
@@ -98,4 +92,7 @@ LEDS:
 (To create IFS.tgz: tar -czvf IFS.tgz IFS)
 To check systemd: `systemctl status alto-gateway.service` (or alto-ifs.service)
 Also look in /var/log/syslog for errors
+
+For background on the BeagleBone, see my articles on the [BeagleBone PRU](http://www.righto.com/2016/08/pru-tips-understanding-beaglebones.html) and [PRU C compiler](http://www.righto.com/2016/09/how-to-run-c-programs-on-beaglebones.html).
+
 
