@@ -1,4 +1,4 @@
-update=Tuesday, December 19, 2017 'PMt' 04:56:55 PM
+update=Sunday, January 07, 2018 'PMt' 08:54:30 PM
 version=1
 last_client=kicad
 [pcbnew]
@@ -59,3 +59,13 @@ LibName27=opto
 LibName28=atmel
 LibName29=contrib
 LibName30=SparkFun-KiCad-Libraries-master/Libraries/SparkFun-Resistors
+[schematic_editor]
+version=1
+PageLayoutDescrFile=
+PlotDirectoryName=
+SubpartIdSeparator=0
+SubpartFirstId=65
+NetFmtName=
+SpiceForceRefPrefix=0
+SpiceUseNetNumbers=0
+LabSize=60

@@ -469,7 +469,7 @@ F 4 " " H 7000 4300 60  0000 C CNN "Field4"
 $EndComp
 Wire Wire Line
 	7000 3900 6900 3900
-Text Label 6850 3900 2    60   ~ 0
+Text Label 6900 3900 2    60   ~ 0
 FROM_ALTO
 Text Label 7000 4300 3    60   ~ 0
 GND
