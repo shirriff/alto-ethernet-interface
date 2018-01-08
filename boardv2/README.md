@@ -1,6 +1,6 @@
-# Instructions for building the board
+# Instructions for building the board (obsolete)
 
-Note: this version of the board is untested.
+Note: this version of the board has been replaced by boardv3.
 
 The board was designed with KiCad. This directory contains the KiCad files.
 The board can be ordered from OshPark [here](https://oshpark.com/shared_projects/5WJDIPzl).
