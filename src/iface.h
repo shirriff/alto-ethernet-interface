@@ -11,9 +11,7 @@
 #define STATUS_INPUT_COMPLETE (0 << 8)
 #define STATUS_OUTPUT_COMPLETE (1 << 8)
 #define STATUS_INPUT_OVERRUN (2 << 8)
-#define STATUS_LOAD_OVERFLOW (3 << 8)
-#define STATUS_ZERO_LENGTH (4 << 8)
-#define STATUS_SOFTWARE_RESET (5 << 8)
+#define STATUS_SOFTWARE_RESET (5 << 8) // Internal only
 
 #define STATUS_TRUNCATED 36 // Not part of real interface
 #define STATUS_TIMING_ERROR 32 // Not part of real interface
@@ -41,14 +39,11 @@ struct iface {
 	uint32_t r_max_length; // in, bytes
 	uint32_t r_received_length; // out, bytes
 	uint32_t r_buf; // in (pointer)
+	uint32_t r_truncated; // out, boolean
 	uint32_t r_status; // out
 	uint32_t w_owner; // in
 	uint32_t w_length; // bytes, in (buffer length)
 	uint32_t w_buf; // in (pointer)
 	uint32_t w_status; // out
 };
-
-// For debugging. Offset into RAM
-#define CIRCULAR_BUF_START ((uint32_t *)0x00001000)
-#define CIRCULAR_BUF_END ((uint32_t *)0x00002000)
 #endif /* IFACE_H_ */
