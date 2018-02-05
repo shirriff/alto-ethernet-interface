@@ -16,6 +16,7 @@ This will install the Ethernet software on the BeagleBone's flash.
 Eventually the BeagleBone will shut down.
 Then remove the SD card and reboot the BeagleBone.
 You can monitor progress through the serial pins if anything goes wrong.
+More instructions on installing from SD are below in the "Kernel" section.
 
 # The hard way
 
