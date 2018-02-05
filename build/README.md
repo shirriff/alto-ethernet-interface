@@ -1,7 +1,26 @@
 # Installation
 
-A bunch of steps are necessary to configure the BeagleBone and install the software.
-This file explains how to set up the BeagleBone and copy the files in this directory onto the BeagleBone.
+This file explains how to set up the BeagleBone with the necessary kernel and software.
+
+# The easy way
+
+I've put a preconfigured installer disk image on Google Drive as [beaglbone-disk-image.gz](https://drive.google.com/open?id=1FQD5G4dWTDRxP52c7tuiRwAq8hB3n_ZX).
+
+You can use the following command to put the disk image on a micro SD card. Make sure that `sdb` is the right drive so you don't clobber your hard disk.
+```
+gunzip -c beaglebone-disk-image.gz | dd of=/dev/sdb bs=1048576
+```
+
+Next, boot the BeagleBone with the SD card and wait about 15 minutes while the LEDs cycle back and forth.
+This will install the Ethernet software on the BeagleBone's flash.
+Eventually the BeagleBone will shut down.
+Then remove the SD card and reboot the BeagleBone.
+You can monitor progress through the serial pins if anything goes wrong.
+
+# The hard way
+
+If you want to install the software from scratch, follow the steps in the remainder of this file to install the kernel, the Mono system, the Ethernet software, and various configuration files..
+This is a somewhat tedious process, so install the disk image instead if you can.
 
 ## Kernel
 
@@ -39,6 +58,8 @@ scp PRU-ETHER-ALTO-00A0.dtbo root@192.168.7.2:/lib/firmware
 scp *.service root@192.168.7.2:/lib/systemd/system
 ssh root@192.168.7.2 tar xfv IFS.tgz
 ```
+
+Set `UseDNS no` in `/etc/ssh/sshd_config` to avoid ssh delays from DNS.
 
 ## Configure services to run on boot
 Log onto the BeagleBone as root and run:
