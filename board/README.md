@@ -46,7 +46,7 @@ W Y . . . R . . . . L . .
 
 ## Testing
 
-Output signal to Alto can be measured across pins 1 and 3 of the IC (pin 1 = ground). When connected to Alto, signal should be idle low (0.2V), pulsing to 3.5V. Can be a bit of overshoot, but shouldn't be ringing.
+Output signal to Alto can be measured across pins 1 and 3 of the IC (pin 7 = ground). When connected to Alto, signal should be idle low (0.2V), pulsing to 3.5V. Can be a bit of overshoot, but shouldn't be ringing.
 When disconnected from Alto, signal should go between 0V and 5V.
 
 
